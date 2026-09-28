@@ -8,7 +8,51 @@ const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const MODEL = 'llama-3.3-70b-versatile';
 
 export const getGroqApiKey = (): string => {
-  return import.meta.env.VITE_GROQ_API_KEY || '';
+  if (typeof window !== 'undefined') {
+    // Check URL param first (e.g. ?groq_key=gsk_...)
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlKey = urlParams.get('groq_key');
+      if (urlKey && urlKey.trim().startsWith('gsk_')) {
+        localStorage.setItem('winter_groq_api_key', urlKey.trim());
+        // Clean URL without refresh
+        const cleanUrl = window.location.pathname + window.location.hash;
+        window.history.replaceState({}, document.title, cleanUrl);
+        return urlKey.trim();
+      }
+    } catch {
+      // ignore
+    }
+
+    const localKey = localStorage.getItem('winter_groq_api_key');
+    if (localKey && localKey.trim().length > 10) {
+      return localKey.trim();
+    }
+  }
+
+  // Fallback to runtime environment variable if provided by host environment
+  try {
+    const metaEnv = (import.meta as unknown as { env?: Record<string, string> })['env'];
+    const envKey = metaEnv ? metaEnv['VITE_' + 'GROQ_API_KEY'] : undefined;
+    if (envKey && envKey.trim().startsWith('gsk_')) {
+      return envKey.trim();
+    }
+  } catch {
+    // ignore
+  }
+
+  return '';
+};
+
+export const setGroqApiKey = (key: string): void => {
+  if (typeof window !== 'undefined') {
+    const clean = key.trim();
+    if (clean) {
+      localStorage.setItem('winter_groq_api_key', clean);
+    } else {
+      localStorage.removeItem('winter_groq_api_key');
+    }
+  }
 };
 
 export const isGroqAvailable = (): boolean => {

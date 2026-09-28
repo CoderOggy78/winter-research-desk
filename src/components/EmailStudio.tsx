@@ -15,11 +15,12 @@ import {
   Paperclip,
   Clock,
   Wand2,
+  Key,
   Info
 } from 'lucide-react';
 import { EmailFormData, renderEmail, INITIAL_EMAIL_FORM } from '../data/emailTemplates';
 import { OnboardingProfile } from '../types';
-import { isGroqAvailable, reviewEmailDraft, suggestResearchConnection } from '../utils/groq';
+import { isGroqAvailable, getGroqApiKey, setGroqApiKey, reviewEmailDraft, suggestResearchConnection } from '../utils/groq';
 
 interface EmailStudioProps {
   profile: OnboardingProfile;
@@ -63,6 +64,15 @@ export const EmailStudio: React.FC<EmailStudioProps> = ({
     polishedText?: string;
   } | null>(null);
   const [groqError, setGroqError] = useState<string | null>(null);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState(getGroqApiKey());
+  const [hasKey, setHasKey] = useState(isGroqAvailable());
+
+  const handleSaveApiKey = () => {
+    setGroqApiKey(apiKeyInput);
+    setHasKey(isGroqAvailable());
+    setShowApiKeyModal(false);
+  };
 
   // Personalization checklist items state
   const [checklist, setChecklist] = useState<Record<string, boolean>>({
@@ -557,16 +567,34 @@ export const EmailStudio: React.FC<EmailStudioProps> = ({
 
               {/* Action Buttons */}
               <div className="flex items-center gap-1.5">
-                {/* Optional Groq AI Polish Button */}
-                {isGroqAvailable() && (
+                {/* Groq AI Button with Setup option */}
+                {hasKey ? (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={handleGroqReview}
+                      disabled={groqLoading}
+                      className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 shadow-subtle transition-all cursor-pointer disabled:opacity-50"
+                      title="Review tone and remove buzzwords using Groq AI"
+                    >
+                      <Wand2 className="w-3 h-3 text-teal-700" />
+                      <span>{groqLoading ? 'Analyzing...' : 'AI Tone Review (Groq)'}</span>
+                    </button>
+                    <button
+                      onClick={() => { setApiKeyInput(getGroqApiKey()); setShowApiKeyModal(true); }}
+                      className="p-1 rounded-lg border border-teal-200 bg-white hover:bg-teal-50 text-teal-700 transition-colors"
+                      title="Configure Groq API Key"
+                    >
+                      <Key className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
                   <button
-                    onClick={handleGroqReview}
-                    disabled={groqLoading}
-                    className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 shadow-subtle transition-all cursor-pointer disabled:opacity-50"
-                    title="Review tone and remove buzzwords using Groq AI"
+                    onClick={() => { setApiKeyInput(getGroqApiKey()); setShowApiKeyModal(true); }}
+                    className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200 shadow-subtle transition-all cursor-pointer"
+                    title="Add your free Groq API key to unlock AI tone review"
                   >
-                    <Wand2 className="w-3 h-3 text-teal-700" />
-                    <span>{groqLoading ? 'Analyzing...' : 'AI Tone Review (Groq)'}</span>
+                    <Wand2 className="w-3 h-3 text-stone-500" />
+                    <span>AI Review (Setup Key)</span>
                   </button>
                 )}
 
@@ -781,6 +809,90 @@ export const EmailStudio: React.FC<EmailStudioProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Groq API Key Setup Modal */}
+      {showApiKeyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-stone-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-teal-50 border border-teal-200/60 flex items-center justify-center text-teal-800">
+                  <Key className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-serif text-lg font-semibold text-stone-900 leading-snug">Groq AI Settings</h3>
+                  <p className="text-[11px] text-stone-500">Optional AI tone review & buzzword stripper</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowApiKeyModal(false)}
+                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-700 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <p className="text-xs text-stone-600 leading-relaxed">
+              Your key is saved locally in your browser (<span className="font-mono text-[10px] bg-stone-100 px-1 py-0.5 rounded">localStorage</span>). It connects directly to Groq's high-speed Llama 3.3 model and is never stored on any server.
+            </p>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-stone-800">
+                Groq API Key <span className="font-normal text-stone-500">(starts with gsk_)</span>
+              </label>
+              <input
+                type="password"
+                value={apiKeyInput}
+                onChange={(e) => setApiKeyInput(e.target.value)}
+                placeholder="gsk_..."
+                className="w-full text-xs font-mono px-3 py-2.5 rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-700 bg-stone-50/50"
+              />
+              <p className="text-[11px] text-stone-400">
+                Don't have one? Get a free API key in seconds from{' '}
+                <a
+                  href="https://console.groq.com/keys"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-teal-700 underline hover:text-teal-900"
+                >
+                  console.groq.com
+                </a>
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-stone-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setApiKeyInput('');
+                  setGroqApiKey('');
+                  setHasKey(false);
+                  setShowApiKeyModal(false);
+                }}
+                className="text-xs text-red-600 hover:text-red-800 font-medium"
+              >
+                Clear Key
+              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowApiKeyModal(false)}
+                  className="px-3.5 py-1.5 text-xs text-stone-600 hover:text-stone-800 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveApiKey}
+                  className="px-4 py-1.5 text-xs font-medium bg-teal-800 hover:bg-teal-900 text-white rounded-lg transition-colors shadow-subtle"
+                >
+                  Save Key
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
