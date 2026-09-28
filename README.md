@@ -2,7 +2,7 @@
 
 A focused, calm, and rigorous academic workspace designed for Indian undergraduate students across disciplines (Computer Science, AI/ML, Electrical & Electronics, Mechanical Engineering, Chemistry, Physics, Life Sciences, Mathematics, and Interdisciplinary Studies) preparing for and applying to winter research internships.
 
-Built with **React 19**, **TypeScript**, **Tailwind CSS**, and **Vite**, inspired by the refined, considered UI/UX of modern tools like [wisprflow.ai](https://wisprflow.ai).
+Built with **React 19**, **TypeScript**, **Tailwind CSS**, and **Vite**, inspired by the refined, considered UI/UX of modern tools
 
 ---
 
