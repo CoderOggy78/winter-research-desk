@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { FacultyMember, ApplicationRecord } from '../types';
 import { explainFacultyMatch } from '../data';
+import { MultiSelectFilter } from './MultiSelectFilter';
 import {
   getSavedFacultyIds,
   toggleSavedFacultyId,
@@ -41,14 +42,21 @@ interface FacultyDirectoryProps {
   onAddToTracker: (appData: Partial<ApplicationRecord>) => void;
 }
 
+const matchesSearch = (f: FacultyMember, q: string) =>
+  f.name.toLowerCase().includes(q) ||
+  f.researchInterests.toLowerCase().includes(q) ||
+  f.institution.toLowerCase().includes(q) ||
+  f.department.toLowerCase().includes(q) ||
+  f.location.toLowerCase().includes(q);
+
 export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
   facultyList,
   onPrepareEmail,
   onAddToTracker,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedInstitution, setSelectedInstitution] = useState<string>('all');
-  const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
+  const [selectedInstitutions, setSelectedInstitutions] = useState<string[]>([]);
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
   const [onlySaved, setOnlySaved] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 24;
@@ -91,19 +99,55 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
     const q = searchQuery.toLowerCase().trim();
     return facultyList.filter((f) => {
       if (onlySaved && !savedIds.includes(f.id)) return false;
-      if (selectedInstitution !== 'all' && f.institution !== selectedInstitution) return false;
-      if (selectedDepartment !== 'all' && f.department !== selectedDepartment) return false;
+      if (selectedInstitutions.length > 0 && !selectedInstitutions.includes(f.institution)) return false;
+      if (selectedDepartments.length > 0 && !selectedDepartments.includes(f.department)) return false;
 
       if (!q) return true;
-      return (
-        f.name.toLowerCase().includes(q) ||
-        f.researchInterests.toLowerCase().includes(q) ||
-        f.institution.toLowerCase().includes(q) ||
-        f.department.toLowerCase().includes(q) ||
-        f.location.toLowerCase().includes(q)
-      );
+      return matchesSearch(f, q);
     });
-  }, [facultyList, searchQuery, selectedInstitution, selectedDepartment, onlySaved, savedIds]);
+  }, [facultyList, searchQuery, selectedInstitutions, selectedDepartments, onlySaved, savedIds]);
+
+  // Per-option counts, each computed against the *other* active filters so the
+  // dropdowns show how many results picking an option would yield.
+  const institutionOptions = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    const counts = new Map<string, number>();
+    facultyList.forEach((f) => {
+      if (onlySaved && !savedIds.includes(f.id)) return;
+      if (selectedDepartments.length > 0 && !selectedDepartments.includes(f.department)) return;
+      if (q && !matchesSearch(f, q)) return;
+      if (!f.institution) return;
+      counts.set(f.institution, (counts.get(f.institution) ?? 0) + 1);
+    });
+    return institutions.map((inst) => ({ value: inst, count: counts.get(inst) ?? 0 }));
+  }, [institutions, facultyList, searchQuery, selectedDepartments, onlySaved, savedIds]);
+
+  const departmentOptions = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    const counts = new Map<string, number>();
+    facultyList.forEach((f) => {
+      if (onlySaved && !savedIds.includes(f.id)) return;
+      if (selectedInstitutions.length > 0 && !selectedInstitutions.includes(f.institution)) return;
+      if (q && !matchesSearch(f, q)) return;
+      if (!f.department) return;
+      counts.set(f.department, (counts.get(f.department) ?? 0) + 1);
+    });
+    return departments.map((dept) => ({ value: dept, count: counts.get(dept) ?? 0 }));
+  }, [departments, facultyList, searchQuery, selectedInstitutions, onlySaved, savedIds]);
+
+  const hasActiveFilters =
+    selectedInstitutions.length > 0 ||
+    selectedDepartments.length > 0 ||
+    Boolean(searchQuery) ||
+    onlySaved;
+
+  const clearAllFilters = () => {
+    setSelectedInstitutions([]);
+    setSelectedDepartments([]);
+    setSearchQuery('');
+    setOnlySaved(false);
+    setCurrentPage(1);
+  };
 
   // Pagination
   const totalPages = Math.ceil(filteredList.length / pageSize) || 1;
@@ -246,64 +290,38 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
 
         {/* Dropdown Filters */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2 border-t border-stone-line/60 text-xs">
-          {/* Institution Filter */}
-          <div>
-            <label className="block text-[11px] font-semibold text-ink-muted mb-1">
-              Filter by IIT Campus
-            </label>
-            <select
-              value={selectedInstitution}
-              onChange={(e) => {
-                setSelectedInstitution(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full px-2.5 py-1.5 rounded-lg border border-stone-line bg-[#FAF8F5] focus:bg-white text-xs text-ink-primary outline-none"
-            >
-              <option value="all">All Institutions ({facultyList.length})</option>
-              {institutions.map((inst) => (
-                <option key={inst} value={inst}>
-                  {inst}
-                </option>
-              ))}
-            </select>
-          </div>
+          <MultiSelectFilter
+            label="Filter by IIT Campus"
+            allLabel="All Institutions"
+            allCount={facultyList.length}
+            options={institutionOptions}
+            selected={selectedInstitutions}
+            onChange={(next) => {
+              setSelectedInstitutions(next);
+              setCurrentPage(1);
+            }}
+          />
 
-          {/* Department Filter */}
-          <div>
-            <label className="block text-[11px] font-semibold text-ink-muted mb-1">
-              Filter by Department
-            </label>
-            <select
-              value={selectedDepartment}
-              onChange={(e) => {
-                setSelectedDepartment(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full px-2.5 py-1.5 rounded-lg border border-stone-line bg-[#FAF8F5] focus:bg-white text-xs text-ink-primary outline-none"
-            >
-              <option value="all">All Departments</option>
-              {departments.map((dept) => (
-                <option key={dept} value={dept}>
-                  {dept}
-                </option>
-              ))}
-            </select>
-          </div>
+          <MultiSelectFilter
+            label="Filter by Department"
+            allLabel="All Departments"
+            allCount={facultyList.length}
+            options={departmentOptions}
+            selected={selectedDepartments}
+            onChange={(next) => {
+              setSelectedDepartments(next);
+              setCurrentPage(1);
+            }}
+          />
 
           {/* Results Summary */}
           <div className="flex items-end justify-between sm:justify-end gap-2 pb-0.5">
             <span className="text-xs text-ink-muted">
               Showing <strong className="text-ink-primary font-mono">{filteredList.length}</strong> matching researchers
             </span>
-            {(selectedInstitution !== 'all' || selectedDepartment !== 'all' || searchQuery || onlySaved) && (
+            {hasActiveFilters && (
               <button
-                onClick={() => {
-                  setSelectedInstitution('all');
-                  setSelectedDepartment('all');
-                  setSearchQuery('');
-                  setOnlySaved(false);
-                  setCurrentPage(1);
-                }}
+                onClick={clearAllFilters}
                 className="text-[11px] text-teal-700 hover:text-teal-900 underline font-medium cursor-pointer"
               >
                 Reset filters
@@ -311,6 +329,49 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
             )}
           </div>
         </div>
+
+        {/* Active Filter Chips */}
+        {hasActiveFilters && (
+          <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-stone-line/60">
+            <span className="text-[11px] text-ink-muted font-semibold">Active:</span>
+            {selectedInstitutions.map((inst) => (
+              <span
+                key={`inst-${inst}`}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-teal-50 border border-teal-200 text-teal-900 text-[11px]"
+              >
+                <span className="max-w-[160px] truncate">{inst}</span>
+                <button
+                  onClick={() => {
+                    setSelectedInstitutions((prev) => prev.filter((v) => v !== inst));
+                    setCurrentPage(1);
+                  }}
+                  className="text-teal-700 hover:text-teal-900 cursor-pointer"
+                  aria-label={`Remove ${inst} filter`}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+            {selectedDepartments.map((dept) => (
+              <span
+                key={`dept-${dept}`}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-teal-50 border border-teal-200 text-teal-900 text-[11px]"
+              >
+                <span className="max-w-[160px] truncate">{dept}</span>
+                <button
+                  onClick={() => {
+                    setSelectedDepartments((prev) => prev.filter((v) => v !== dept));
+                    setCurrentPage(1);
+                  }}
+                  className="text-teal-700 hover:text-teal-900 cursor-pointer"
+                  aria-label={`Remove ${dept} filter`}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Faculty Cards Grid */}
@@ -324,12 +385,7 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
             Try broadening your search term or clearing the department filter. You can also import custom faculty spreadsheets via the Import button.
           </p>
           <button
-            onClick={() => {
-              setSearchQuery('');
-              setSelectedInstitution('all');
-              setSelectedDepartment('all');
-              setOnlySaved(false);
-            }}
+            onClick={clearAllFilters}
             className="px-4 py-2 bg-stone-hover hover:bg-stone-line/70 text-xs font-medium rounded-lg text-ink-primary cursor-pointer"
           >
             Clear all filters
